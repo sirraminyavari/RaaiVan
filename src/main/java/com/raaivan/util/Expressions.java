@@ -1,5 +1,6 @@
-package com.raaivan.modules.rv.beans;
+package com.raaivan.util;
 
+import com.raaivan.modules.rv.beans.InlineTag;
 import com.raaivan.util.RVBeanFactory;
 import io.micrometer.core.instrument.util.StringUtils;
 import org.apache.commons.text.StringEscapeUtils;

@@ -1,5 +1,6 @@
 package com.raaivan.util;
 
+import io.micrometer.core.instrument.util.StringUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -23,6 +24,19 @@ public class RVJSON extends JSONObject {
         super.put(key, value);
 
         return this;
+    }
+
+    public boolean hasValue(String key) {
+        return this.has(key) && this.get(key) != null && !StringUtils.isBlank(this.get(key).toString());
+    }
+
+    public boolean isJson(String key) {
+        return this.has(key) &&
+                (this.get(key) instanceof JSONObject || this.get(key) instanceof RVJSON);
+    }
+
+    public boolean isArray(String key) {
+        return this.has(key) && this.get(key) instanceof JSONArray;
     }
 
     public static RVJSON fromString(String json){

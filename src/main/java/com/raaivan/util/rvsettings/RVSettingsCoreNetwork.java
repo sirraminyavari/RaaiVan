@@ -1,6 +1,6 @@
 package com.raaivan.util.rvsettings;
 
-import com.raaivan.modules.rv.beans.Expressions;
+import com.raaivan.util.Expressions;
 import io.micrometer.core.instrument.util.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

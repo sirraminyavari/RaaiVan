@@ -6,7 +6,7 @@ import com.raaivan.modules.corenetwork.beans.NodeMember;
 import com.raaivan.modules.corenetwork.beans.NodeType;
 import com.raaivan.modules.corenetwork.beans.NodesCount;
 import com.raaivan.modules.corenetwork.enums.ExtensionType;
-import com.raaivan.modules.rv.beans.Expressions;
+import com.raaivan.util.Expressions;
 import com.raaivan.util.PublicMethods;
 import com.raaivan.util.RVBeanFactory;
 import com.raaivan.util.RaaiVanConfig;

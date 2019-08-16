@@ -2,9 +2,7 @@ package com.raaivan.util;
 
 import com.raaivan.modules.rv.RVDAO;
 import com.raaivan.modules.documents.util.DocumentUtilities;
-import com.raaivan.modules.users.beans.User;
 import com.raaivan.util.rvsettings.RaaiVanSettings;
-import com.raaivan.modules.rv.beans.Expressions;
 import com.raaivan.modules.rv.beans.MutableUUID;
 import com.raaivan.modules.rv.enums.TextDirection;
 import io.micrometer.core.instrument.util.StringUtils;
@@ -14,14 +12,10 @@ import org.apache.commons.lang3.mutable.*;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.MutableDateTime;
-import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.ApplicationScope;
 
-import javax.annotation.PostConstruct;
 import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;

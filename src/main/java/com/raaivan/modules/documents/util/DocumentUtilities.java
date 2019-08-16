@@ -4,18 +4,18 @@ import com.raaivan.modules.documents.beans.DocFileInfo;
 import com.raaivan.modules.documents.enums.DefaultIconTypes;
 import com.raaivan.modules.documents.enums.FileOwnerTypes;
 import com.raaivan.modules.documents.enums.FolderNames;
-import com.raaivan.util.PublicMethods;
-import com.raaivan.util.RVBeanFactory;
+import com.raaivan.util.*;
 import com.raaivan.util.rvsettings.RaaiVanSettings;
-import com.raaivan.util.PublicConsts;
-import com.raaivan.util.RVJSON;
 import io.micrometer.core.instrument.util.StringUtils;
+import org.apache.commons.lang3.mutable.MutableLong;
+import org.json.JSONArray;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.ApplicationScope;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +29,96 @@ public class DocumentUtilities {
     public void _setDependencies(PublicMethods publicMethods, RaaiVanSettings raaiVanSettings) {
         if (this.publicMethods == null) this.publicMethods = publicMethods;
         if (this.raaivanSettings == null) this.raaivanSettings = raaiVanSettings;
+    }
+
+    private void _get_file_info(String fileInfo, StringBuilder fileName, StringBuilder contentType, MutableLong contentLength)
+    {
+        //the first element if FileName
+        int equalIndex = fileInfo.indexOf('=');
+        int ampersandIndex = fileInfo.indexOf('&');
+
+        fileName.append(Base64.decode(fileInfo.substring(equalIndex + 1, ampersandIndex - equalIndex - 1)));
+
+        fileInfo = fileInfo.substring(ampersandIndex + 1);
+
+        //the second element is GuidName
+        ampersandIndex = fileInfo.indexOf('&');
+        fileInfo = fileInfo.substring(ampersandIndex + 1);
+
+        //the third element is ContentType
+        equalIndex = fileInfo.indexOf('=');
+        ampersandIndex = fileInfo.indexOf('&');
+
+        contentType.append(fileInfo.substring(equalIndex + 1, ampersandIndex - equalIndex - 1));
+
+        fileInfo = fileInfo.substring(ampersandIndex + 1);
+
+        //the fourth element is ContentLength
+        equalIndex = fileInfo.indexOf('=');
+        ampersandIndex = fileInfo.indexOf('&');
+
+        contentLength.setValue(publicMethods.parseLong(fileInfo.substring(equalIndex + 1)));
+
+        fileInfo = fileInfo.substring(ampersandIndex + 1);
+    }
+
+    public List<DocFileInfo> getFilesInfo(String strFiles, char delimiter, char innerDelimiter)
+    {
+        List<DocFileInfo> retList = new ArrayList<>();
+
+        Arrays.stream(strFiles.split(Character.toString(delimiter))).forEach(attachedFile -> {
+            if(StringUtils.isBlank(attachedFile)) return;
+
+            String[] fileItem = attachedFile.split(Character.toString(innerDelimiter));
+            if(fileItem.length < 2) return;
+
+            StringBuilder fileName = new StringBuilder();
+            StringBuilder contentType = new StringBuilder();
+            MutableLong contentLength = new MutableLong(0);
+
+            fileItem[1] = Base64.decode(fileItem[1]);
+
+            _get_file_info(fileItem[1], fileName, contentType, contentLength);
+
+            String strGuidName = fileItem[0];
+            UUID guidName = publicMethods.parseUUID(strGuidName.lastIndexOf('.') >= 0 ?
+                    strGuidName.substring(0, strGuidName.lastIndexOf('.')) : strGuidName);
+
+            int indexOfExtension = fileName.toString().lastIndexOf('.');
+            String extension = "";
+            String pureName = fileName.toString();
+            if (indexOfExtension > 0)
+            {
+                extension = fileName.substring(indexOfExtension + 1).toLowerCase();
+                pureName = fileName.substring(0, indexOfExtension);
+            }
+
+            DocFileInfo dfi = RVBeanFactory.getBean(DocFileInfo.class);
+
+            dfi.setFileID(guidName);
+            dfi.setFileName(pureName);
+            dfi.setExtension(extension);
+            dfi.setSize(contentLength.getValue());
+
+            retList.add(dfi);
+        });
+
+        return retList;
+    }
+
+    public List<DocFileInfo> getFilesInfo(String strFiles){
+        return getFilesInfo(strFiles, '|', ',');
+    }
+
+    public JSONArray getFilesJson(UUID applicationId, List<DocFileInfo> attachedFiles, boolean icon)
+    {
+        JSONArray arr = new JSONArray();
+        if(attachedFiles != null) attachedFiles.forEach(f -> arr.put(f.toJson(applicationId, icon)));
+        return arr;
+    }
+
+    public JSONArray getFilesJson(UUID applicationId, List<DocFileInfo> attachedFiles){
+        return getFilesJson(applicationId, attachedFiles, false);
     }
 
     public FolderNames getFolderName(FileOwnerTypes ownerType)
