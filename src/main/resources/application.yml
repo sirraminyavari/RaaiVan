@@ -1,0 +1,22 @@
+spring:
+  profiles: dev
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=EKM_App
+    username: sa
+    password: hrdovjshjpvjo
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: none
+server:
+  port: 8082
+  compression:
+    enabled: true
+---
+spring:
+  profiles: test
+server:
+  port: 8083
+  compression:
+    enabled: true
