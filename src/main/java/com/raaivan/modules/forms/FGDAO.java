@@ -1,18 +1,22 @@
 package com.raaivan.modules.forms;
 
-import com.raaivan.modules.forms.beans.FormElement;
-import com.raaivan.modules.forms.beans.FormType;
+import com.raaivan.modules.forms.beans.*;
 import com.raaivan.modules.forms.enums.FormElementTypes;
+import com.raaivan.modules.rv.beans.MutableUUID;
 import com.raaivan.util.PublicMethods;
 import com.raaivan.util.dbutil.RVConnection;
 import com.raaivan.util.dbutil.RVStructuredParam;
+import com.raaivan.util.rvsettings.RaaiVanSettings;
 import io.micrometer.core.instrument.util.StringUtils;
+import org.apache.commons.lang3.mutable.MutableDouble;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.joda.time.DateTime;
+import org.joda.time.MutableDateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.annotation.ApplicationScope;
 
-import java.security.cert.CollectionCertStoreParameters;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,12 +28,15 @@ public class FGDAO {
     private RVConnection rvConnection;
     private FGParsers parser;
     private PublicMethods publicMethods;
+    private RaaiVanSettings raaivanSettings;
 
     @Autowired
-    public void _setDependencies(RVConnection rvConnection, FGParsers parser, PublicMethods publicMethods) {
+    public void _setDependencies(RVConnection rvConnection, FGParsers parser, PublicMethods publicMethods,
+                                 RaaiVanSettings raaivanSettings) {
         if (this.rvConnection == null) this.rvConnection = rvConnection;
         if (this.parser == null) this.parser = parser;
         if (this.publicMethods == null) this.publicMethods = publicMethods;
+        if (this.raaivanSettings == null) this.raaivanSettings = raaivanSettings;
     }
 
     private String getQualifiedName(String name) {
@@ -72,9 +79,21 @@ public class FGDAO {
                 rvConnection.getSearchText(searchText), count, lowerBoundary, hasName, archive));
     }
 
+    public List<FormType> getForms(UUID applicationId, String searchText, Integer count, Integer lowerBoundary) {
+        return getForms(applicationId, searchText, count, lowerBoundary, null, null);
+    }
+
     public List<FormType> getForms(UUID applicationId, List<UUID> formIds) {
         return parser.formTypes(rvConnection.read(getQualifiedName("GetFormsByIDs"), applicationId,
                 formIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ','));
+    }
+
+    public FormType getForm(UUID applicationId, UUID formId) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(formId);
+        }};
+
+        return getForms(applicationId, ids).stream().findFirst().orElse(null);
     }
 
     public boolean addFormElement(UUID applicationId, UUID elementId, UUID formId, String title, String name,
@@ -114,9 +133,21 @@ public class FGDAO {
                 applicationId, formId, ownerId, type == FormElementTypes.None ? null : type.toString()));
     }
 
+    public List<FormElement> getFormElements(UUID applicationId, UUID formId) {
+        return getFormElements(applicationId, formId, null, FormElementTypes.None);
+    }
+
     public List<FormElement> getFormElements(UUID applicationId, List<UUID> elementIds) {
         return parser.formElements(rvConnection.read(getQualifiedName("GetFormElementsByIDs"), applicationId,
                 elementIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ','));
+    }
+
+    public FormElement getFormElement(UUID applicationId, UUID elementId) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(elementId);
+        }};
+
+        return getFormElements(applicationId, ids).stream().findFirst().orElse(null);
     }
 
     public List<UUID> isFormElement(UUID applicationId, List<UUID> ids) {
@@ -124,7 +155,15 @@ public class FGDAO {
                 ids.stream().map(UUID::toString).collect(Collectors.joining(",")), ',');
     }
 
-    public boolean createFormInstance(UUID applicationId, List<FormType> instances, UUID currentUserId) {
+    public boolean isFormElement(UUID applicationId, UUID id) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(id);
+        }};
+
+        return isFormElement(applicationId, ids).size() > 0;
+    }
+
+    public boolean createFormInstances(UUID applicationId, List<FormType> instances, UUID currentUserId) {
         RVStructuredParam instancesDT = new RVStructuredParam("FormInstanceTableType")
                 .addColumnMetaData("InstanceID", UUID.class)
                 .addColumnMetaData("FormID", UUID.class)
@@ -139,10 +178,26 @@ public class FGDAO {
                 applicationId, instancesDT, currentUserId, publicMethods.now());
     }
 
+    public boolean createFormInstance(UUID applicationId, FormType instance, UUID currentUserId) {
+        List<FormType> items = new ArrayList<FormType>() {{
+            add(instance);
+        }};
+
+        return createFormInstances(applicationId, items, currentUserId);
+    }
+
     public boolean removeFormInstances(UUID applicationId, List<UUID> instanceIds, UUID currentUserId) {
         return rvConnection.succeed(getQualifiedName("RemoveFormInstances"), applicationId,
                 instanceIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ',',
                 currentUserId, publicMethods.now());
+    }
+
+    public boolean removeFormInstance(UUID applicationId, UUID instanceId, UUID currentUserId) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(instanceId);
+        }};
+
+        return removeFormInstances(applicationId, ids, currentUserId);
     }
 
     public boolean removeOwnerFormInstances(UUID applicationId, UUID ownerId, UUID formId, UUID currentUserId) {
@@ -157,9 +212,34 @@ public class FGDAO {
                 formId, isTemporary, userId));
     }
 
+    public List<FormType> getOwnerFormInstances(UUID applicationId, List<UUID> ownerIds) {
+        return getOwnerFormInstances(applicationId, ownerIds, null, null, null);
+    }
+
+    public List<FormType> getOwnerFormInstances(UUID applicationId, UUID ownerId,
+                                                UUID formId, Boolean isTemporary, UUID userId) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(ownerId);
+        }};
+
+        return getOwnerFormInstances(applicationId, ids, formId, isTemporary, userId);
+    }
+
+    public List<FormType> getOwnerFormInstances(UUID applicationId, UUID ownerId) {
+        return getOwnerFormInstances(applicationId, ownerId, null, null, null);
+    }
+
     public List<FormType> getFormInstances(UUID applicationId, List<UUID> instanceIds) {
         return parser.formInstances(rvConnection.read(getQualifiedName("GetFormInstances"), applicationId,
                 instanceIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ','));
+    }
+
+    public FormType getFormInstance(UUID applicationId, UUID instanceId) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(instanceId);
+        }};
+
+        return getFormInstances(applicationId, ids).stream().findFirst().orElse(null);
     }
 
     public UUID getFormInstanceOwnerID(UUID applicationId, UUID instanceIdOrElementId) {
@@ -222,11 +302,37 @@ public class FGDAO {
                 elementsDT, guidItemsDT, clearDT, filesDT, currentUserId, publicMethods.now());
     }
 
+    public boolean saveFormInstanceElements(UUID applicationId, List<FormElement> elements,
+                                            List<UUID> elementsToClear, UUID currentUserId) {
+        StringBuilder error = new StringBuilder();
+        return saveFormInstanceElements(applicationId, elements, elementsToClear, currentUserId);
+    }
+
+    public boolean saveFormInstanceElement(UUID applicationId, FormElement element, UUID currentUserId) {
+        List<FormElement> items = new ArrayList<FormElement>() {{
+            add(element);
+        }};
+
+        return saveFormInstanceElements(applicationId, items, new ArrayList<>(), currentUserId);
+    }
+
     public List<FormElement> getFormInstanceElements(UUID applicationId, UUID instanceId,
                                                      List<UUID> elementIds, Boolean filled) {
         return parser.formInstanceElements(rvConnection.read(getQualifiedName("GetFormInstanceElements"),
                 applicationId, instanceId, filled,
                 elementIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ','));
+    }
+
+    public List<FormElement> getFormInstanceElements(UUID applicationId, UUID instanceId, List<UUID> elementIds) {
+        return getFormInstanceElements(applicationId, instanceId, elementIds, null);
+    }
+
+    public List<FormElement> getFormInstanceElements(UUID applicationId, UUID instanceId, Boolean filled) {
+        return getFormInstanceElements(applicationId, instanceId, new ArrayList<>(), filled);
+    }
+
+    public List<FormElement> getFormInstanceElements(UUID applicationId, UUID instanceId) {
+        return getFormInstanceElements(applicationId, instanceId, new ArrayList<>(), null);
     }
 
     public Map<UUID, List<Map.Entry<UUID, String>>> getSelectedGuids(UUID applicationId, List<UUID> elementIds) {
@@ -252,578 +358,268 @@ public class FGDAO {
         return rvConnection.succeed(getQualifiedName("IsDirector"), applicationId, instanceId, userId);
     }
 
-    public static bool SetFormOwner(Guid applicationId, Guid ownerId, Guid formId, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetFormOwner");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    ownerId, formId, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setFormOwner(UUID applicationId, UUID ownerId, UUID formId, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetFormOwner"),
+                applicationId, ownerId, formId, currentUserId, publicMethods.now());
     }
 
-    public static bool ArithmeticDeleteFormOwner(Guid applicationId,
-                                                 Guid ownerId, Guid formId, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("ArithmeticDeleteFormOwner");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    ownerId, formId, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean removeFormOwner(UUID applicationId, UUID ownerId, UUID formId, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("ArithmeticDeleteFormOwner"),
+                applicationId, ownerId, formId, currentUserId, publicMethods.now());
     }
 
-    public static FormType GetOwnerForm(Guid applicationId, Guid ownerId) {
-        string spName = GetFullyQualifiedName("GetOwnerForm");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, ownerId);
-            List<FormType> forms = new List<FormType>();
-            _parse_form_types(ref reader, ref forms);
-            return forms.FirstOrDefault();
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return null;
-        }
+    public FormType getOwnerForm(UUID applicationId, UUID ownerId) {
+        List<FormType> lst = parser.formTypes(rvConnection.read(getQualifiedName("GetOwnerForm"), applicationId, ownerId));
+        return lst.size() > 0 ? lst.get(0) : null;
     }
 
-    public static Guid?
-
-    InitializeOwnerFormInstance(Guid applicationId, Guid ownerId, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("InitializeOwnerFormInstance");
-
-        try {
-            Guid ? instanceId = ProviderUtil.succeed_guid(ProviderUtil.execute_reader(spName, applicationId,
-                    ownerId, currentUserId, DateTime.Now));
-
-            if (instanceId == Guid.Empty) instanceId = null;
-
-            return instanceId;
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return null;
-        }
+    public UUID initializeOwnerFormInstance(UUID applicationId, UUID ownerId, UUID currentUserId) {
+        return rvConnection.getUUID(getQualifiedName("InitializeOwnerFormInstance"),
+                applicationId, ownerId, currentUserId, publicMethods.now());
     }
 
-    public static bool SetElementLimits(Guid applicationId,
-                                        Guid ownerId, ref List<Guid>elementIds, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetElementLimits");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    ownerId, ProviderUtil.list_to_string < Guid > (ref elementIds), ',', currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setElementLimits(UUID applicationId, UUID ownerId, List<UUID> elementIds, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetElementLimits"), applicationId, ownerId,
+                elementIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ',',
+                currentUserId, publicMethods.now());
     }
 
-    public static void GetElementLimits(Guid applicationId, ref List<FormElement>retElements, Guid ownerId) {
-        string spName = GetFullyQualifiedName("GetElementLimits");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, ownerId);
-            _parse_element_limits(ref reader, ref retElements);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<FormElement> getElementLimits(UUID applicationId, UUID ownerId) {
+        return parser.elementLimits(rvConnection.read(getQualifiedName("GetElementLimits"), applicationId, ownerId));
     }
 
-    public static bool SetElementLimitNecessity(Guid applicationId,
-                                                Guid ownerId, Guid elementId, bool necessary, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetElementLimitNecessity");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    ownerId, elementId, necessary, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setElementLimitNecessity(UUID applicationId, UUID ownerId,
+                                            UUID elementId, boolean necessary, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetElementLimitNecessity"),
+                applicationId, ownerId, elementId, necessary, currentUserId, publicMethods.now());
     }
 
-    public static bool ArithmeticDeleteElementLimit(Guid applicationId,
-                                                    Guid ownerId, Guid elementId, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("ArithmeticDeleteElementLimit");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    ownerId, elementId, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean removeElementLimit(UUID applicationId, UUID ownerId, UUID elementId, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("ArithmeticDeleteElementLimit"),
+                applicationId, ownerId, elementId, currentUserId, publicMethods.now());
     }
 
-    public static void GetCommonFormInstanceIDs(Guid applicationId,
-                                                ref List<Guid>retIds, Guid ownerId, Guid filledOwnerId, bool hasLimit) {
-        string spName = GetFullyQualifiedName("GetCommonFormInstanceIDs");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId,
-                    ownerId, filledOwnerId, hasLimit);
-            ProviderUtil.parse_guids(ref reader, ref retIds);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<UUID> getCommonFormInstanceIDs(UUID applicationId, UUID ownerId, UUID filledOwnerId, boolean hasLimit) {
+        return rvConnection.getUUIDList(getQualifiedName("GetCommonFormInstanceIDs"),
+                applicationId, ownerId, filledOwnerId, hasLimit);
     }
 
-    public static void GetFormRecords(Guid applicationId, ref List<FormRecord>retRecords, Guid formId,
-                                      List<Guid> elementIds, List<Guid> instanceIds, List<Guid> ownerIds, List<FormFilter> filters,
-                                      int?lowerBoundary, int?count, Guid?sortByElementId, bool?descending) {
-        List<FormElement> elements = FGController.get_form_elements(applicationId, formId);
+    public List<FormRecord> getFormRecords(UUID applicationId, UUID formId, List<UUID> elementIds,
+                                           List<UUID> instanceIds, List<UUID> ownerIds, List<FormFilter> filters,
+                                           Integer lowerBoundary, Integer count, Integer sortByElementId, Boolean descending) {
+        List<FormElement> elements = getFormElements(applicationId, formId);
 
-        if (elementIds != null && elementIds.Count > 0) {
-            elementIds = elementIds.Where(u = > elements.Any(v = > v.ElementID == u)).ToList();
+        if (elementIds != null && elementIds.size() > 0) {
+            final List<FormElement> els = elements;
 
-            elements = elements.Where(u = > elementIds.Any(v = > v == u.ElementID))
-                    .OrderBy(x = > x.SequenceNumber).ToList();
+            elementIds = elementIds.stream()
+                    .filter(u -> els.stream().anyMatch(v -> v.getElementID() == u)).collect(Collectors.toList());
+
+            final List<UUID> elIds = elementIds;
+
+            elements = elements.stream().filter(u -> elIds.stream().anyMatch(v -> v == u.getElementID()))
+                    .sorted((a, b) -> a.getSequenceNumber() < b.getSequenceNumber() ? -1 : 1).collect(Collectors.toList());
         }
 
-        SqlConnection con = new SqlConnection(ProviderUtil.ConnectionString);
-        SqlCommand cmd = new SqlCommand();
-        cmd.Connection = con;
+        RVStructuredParam elementIdsDT = new RVStructuredParam("GuidTableType")
+                .addColumnMetaData("Value", UUID.class);
+        elementIds.forEach(elementIdsDT::addRow);
 
-        if (sortByElementId == Guid.Empty) sortByElementId = null;
+        RVStructuredParam instanceIdsDT = new RVStructuredParam("GuidTableType")
+                .addColumnMetaData("Value", UUID.class);
+        instanceIds.forEach(instanceIdsDT::addRow);
 
-        //Add ElementIDs
-        DataTable elementIdsTable = new DataTable();
-        elementIdsTable.Columns.Add("Value", typeof(Guid));
+        RVStructuredParam ownerIdsDT = new RVStructuredParam("GuidTableType")
+                .addColumnMetaData("Value", UUID.class);
+        ownerIds.forEach(ownerIdsDT::addRow);
 
-        foreach(Guid eId in elementIds)
-        elementIdsTable.Rows.Add(eId);
+        RVStructuredParam filtersDT = new RVStructuredParam("FormFilterTableType")
+                .addColumnMetaData("ElementID", UUID.class)
+                .addColumnMetaData("OwnerID", UUID.class)
+                .addColumnMetaData("Text", String.class)
+                .addColumnMetaData("TextItems", String.class)
+                .addColumnMetaData("Or", Boolean.class)
+                .addColumnMetaData("Exact", Boolean.class)
+                .addColumnMetaData("DateFrom", DateTime.class)
+                .addColumnMetaData("DateTo", DateTime.class)
+                .addColumnMetaData("FloatFrom", Double.class)
+                .addColumnMetaData("FloatTo", Double.class)
+                .addColumnMetaData("Bit", Boolean.class)
+                .addColumnMetaData("Guid", UUID.class)
+                .addColumnMetaData("GuidItems", String.class);
+        filters.forEach(u -> filtersDT.addRow(u.getElementID(), u.getOwnerID(), u.getText(),
+                String.join(",", u.getTextItems()), u.getOr(), u.getExact(), u.getDateFrom(), u.getDateTo(),
+                u.getFloatFrom(), u.getFloatTo(), u.getBit(), u.getGuid(),
+                u.getGuidItems().stream().map(UUID::toString).collect(Collectors.joining(","))));
 
-        SqlParameter elementIdsParam = new SqlParameter("@ElementIDs", SqlDbType.Structured);
-        elementIdsParam.TypeName = "[dbo].[GuidTableType]";
-        elementIdsParam.Value = elementIdsTable;
-        //end of Add ElementIDs
-
-        //Add InstanceIDs
-        DataTable instanceIdsTable = new DataTable();
-        instanceIdsTable.Columns.Add("Value", typeof(Guid));
-
-        foreach(Guid iId in instanceIds)
-        instanceIdsTable.Rows.Add(iId);
-
-        SqlParameter instanceIdsParam = new SqlParameter("@InstanceIDs", SqlDbType.Structured);
-        instanceIdsParam.TypeName = "[dbo].[GuidTableType]";
-        instanceIdsParam.Value = instanceIdsTable;
-        //end of Add InstanceIDs
-
-        //Add OwnerIDs
-        DataTable ownerIdsTable = new DataTable();
-        ownerIdsTable.Columns.Add("Value", typeof(Guid));
-
-        foreach(Guid oId in ownerIds)
-        ownerIdsTable.Rows.Add(oId);
-
-        SqlParameter ownerIdsParam = new SqlParameter("@OwnerIDs", SqlDbType.Structured);
-        ownerIdsParam.TypeName = "[dbo].[GuidTableType]";
-        ownerIdsParam.Value = ownerIdsTable;
-        //end of Add OwnerIDs
-
-        //Add Filters
-        DataTable filtersTable = new DataTable();
-        filtersTable.Columns.Add("ElementID", typeof(Guid));
-        filtersTable.Columns.Add("OwnerID", typeof(Guid));
-        filtersTable.Columns.Add("Text", typeof(string));
-        filtersTable.Columns.Add("TextItems", typeof(string));
-        filtersTable.Columns.Add("Or", typeof(bool));
-        filtersTable.Columns.Add("Exact", typeof(bool));
-        filtersTable.Columns.Add("DateFrom", typeof(DateTime));
-        filtersTable.Columns.Add("DateTo", typeof(DateTime));
-        filtersTable.Columns.Add("FloatFrom", typeof( double));
-        filtersTable.Columns.Add("FloatTo", typeof( double));
-        filtersTable.Columns.Add("Bit", typeof(bool));
-        filtersTable.Columns.Add("Guid", typeof(Guid));
-        filtersTable.Columns.Add("GuidItems", typeof(string));
-
-        foreach(FormFilter f in filters)
-        {
-            filtersTable.Rows.Add(f.ElementID, f.OwnerID, f.Text, ProviderUtil.list_to_string < string > (f.TextItems),
-                    f.Or, f.Exact, f.DateFrom, f.DateTo, f.FloatFrom, f.FloatTo, f.Bit, f.Guid,
-                    ProviderUtil.list_to_string < Guid > (f.GuidItems));
-        }
-
-        SqlParameter filtersParam = new SqlParameter("@Filters", SqlDbType.Structured);
-        filtersParam.TypeName = "[dbo].[FormFilterTableType]";
-        filtersParam.Value = filtersTable;
-        //end of Add Filters
-
-        cmd.Parameters.AddWithValue("@ApplicationID", applicationId);
-        cmd.Parameters.AddWithValue("@FormID", formId);
-        cmd.Parameters.Add(elementIdsParam);
-        cmd.Parameters.Add(instanceIdsParam);
-        cmd.Parameters.Add(ownerIdsParam);
-        cmd.Parameters.Add(filtersParam);
-        if (lowerBoundary.HasValue) cmd.Parameters.AddWithValue("@LowerBoundary", lowerBoundary);
-        if (count.HasValue) cmd.Parameters.AddWithValue("@Count", count);
-        if (sortByElementId.HasValue) cmd.Parameters.AddWithValue("@SortByElementID", sortByElementId);
-        if (descending.HasValue) cmd.Parameters.AddWithValue("@DESC", descending);
-
-        string spName = GetFullyQualifiedName("GetFormRecords");
-
-        string sep = ", ";
-        string arguments = "@ApplicationID" + sep + "@FormID" + sep + "@ElementIDs" + sep +
-                "@InstanceIDs" + sep + "@OwnerIDs" + sep + "@Filters" + sep +
-                (!lowerBoundary.HasValue ? "null" : "@LowerBoundary") + sep +
-                (!count.HasValue ? "null" : "@Count") + sep +
-                (!sortByElementId.HasValue ? "null" : "@SortByElementID") + sep +
-                (!descending.HasValue ? "null" : "@DESC");
-        cmd.CommandText = ("EXEC" + " " + spName + " " + arguments);
-
-        con.Open();
-        try {
-            IDataReader reader = (IDataReader) cmd.ExecuteReader();
-            _parse_form_records(ref reader, ref retRecords, elements);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        } finally {
-            con.Close();
-        }
+        return parser.formRecords(rvConnection.read(getQualifiedName("GetFormRecords"), applicationId, formId,
+                elementIdsDT, instanceIdsDT, ownerIdsDT, filtersDT, lowerBoundary, count, sortByElementId, descending), elements);
     }
 
-    public static void GetFormStatistics(Guid applicationId, Guid?ownerId, Guid?instanceId,
-                                         ref double weightSum, ref double sum, ref double weightedSum, ref double avg, ref double weightedAvg,
-                                         ref double min, ref double max, ref double var, ref double stDev) {
-        string spName = GetFullyQualifiedName("GetFormStatistics");
-
-        try {
-            if (ownerId == Guid.Empty) ownerId = null;
-            if (instanceId == Guid.Empty) instanceId = null;
-
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, ownerId, instanceId);
-            _parse_form_statistics(ref reader, ref weightSum, ref sum, ref weightedSum, ref avg,
-                    ref weightedAvg, ref min, ref max, ref var, ref stDev);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<FormRecord> getFormRecords(UUID applicationId, UUID formId, List<FormFilter> filters,
+                                           Integer lowerBoundary, Integer count, Integer sortByElementId, Boolean descending) {
+        return getFormRecords(applicationId, formId, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
+                filters, lowerBoundary, count, sortByElementId, descending);
     }
 
-    public static bool ConvertFormToTable(Guid applicationId, Guid formId) {
-        string spName = GetFullyQualifiedName("ConvertFormToTable");
+    public List<FormRecord> getFormRecords(UUID applicationId, UUID formId,
+                                           Integer lowerBoundary, Integer count, Integer sortByElementId, Boolean descending) {
+        return getFormRecords(applicationId, formId, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
+                new ArrayList<>(), lowerBoundary, count, sortByElementId, descending);
+    }
 
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId, formId));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public void getFormStatistics(UUID applicationId, UUID ownerId, UUID instanceId, MutableDouble weightSum,
+                                  MutableDouble sum, MutableDouble weightedSum, MutableDouble avg, MutableDouble weightedAvg,
+                                  MutableDouble min, MutableDouble max, MutableDouble var, MutableDouble stDev) {
+        parser.formStatistics(rvConnection.read(getQualifiedName("GetFormStatistics"), applicationId, ownerId, instanceId),
+                weightSum, sum, weightedSum, avg, weightedAvg, min, max, var, stDev);
+    }
+
+    public boolean convertFormToTable(UUID applicationId, UUID formId) {
+        return rvConnection.succeed(getQualifiedName("ConvertFormToTable"), applicationId, formId);
     }
 
     //Polls
 
-    public static void GetPolls(Guid applicationId, ref List<Poll>ret, Guid?isCopyOfPollId, Guid?ownerId,
-                                bool?archive, string searchText, int?count, long?lowerBoundary) {
-        string spName = GetFullyQualifiedName("GetPolls");
-
-        try {
-            if (isCopyOfPollId == Guid.Empty) isCopyOfPollId = null;
-            if (ownerId == Guid.Empty) ownerId = null;
-
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, isCopyOfPollId, ownerId,
-                    archive, ProviderUtil.get_search_text(searchText), count, lowerBoundary);
-            _parse_polls(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<Poll> getPolls(UUID applicationId, UUID isCopyOfPollId, UUID ownerId,
+                               Boolean archive, String searchText, Integer count, Long lowerBoundary) {
+        return parser.polls(rvConnection.read(getQualifiedName("GetPolls"), applicationId, isCopyOfPollId,
+                ownerId, archive, rvConnection.getSearchText(searchText), count, lowerBoundary));
     }
 
-    public static void GetPolls(Guid applicationId, ref List<Poll>ret, List<Guid> pollIds) {
-        string spName = GetFullyQualifiedName("GetPollsByIDs");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, string.Join(",", pollIds), ',');
-            _parse_polls(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<Poll> getPolls(UUID applicationId, List<UUID> pollIds) {
+        return parser.polls(rvConnection.read(getQualifiedName("GetPollsByIDs"), applicationId,
+                pollIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ','));
     }
 
-    public static bool AddPoll(Guid applicationId, Guid pollId, Guid?copyFromPollId,
-                               Guid?ownerId, string name, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("AddPoll");
+    public Poll getPolls(UUID applicationId, UUID pollId) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(pollId);
+        }};
 
-        try {
-            if (string.IsNullOrEmpty(name)) name = null;
-            if (copyFromPollId == Guid.Empty) copyFromPollId = null;
-            if (ownerId == Guid.Empty) ownerId = null;
-
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, copyFromPollId, ownerId, name, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+        return getPolls(applicationId, ids).stream().findFirst().orElse(null);
     }
 
-    public static Guid?
-
-    GetPollInstance(Guid applicationId,
-                    Guid?pollId, Guid copyFromPollId, Guid?ownerId, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("GetPollInstance");
-
-        try {
-            if (pollId == Guid.Empty) pollId = null;
-            if (ownerId == Guid.Empty) ownerId = null;
-
-            Guid ? result = ProviderUtil.succeed_guid(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, copyFromPollId, ownerId, currentUserId, DateTime.Now));
-
-            return result == Guid.Empty ? null : result;
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return null;
-        }
+    public boolean addPoll(UUID applicationId, UUID pollId, UUID copyFromPollId,
+                               UUID ownerId, String name, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("AddPoll"),
+                applicationId, pollId, copyFromPollId, ownerId, name, currentUserId, publicMethods.now());
     }
 
-    public static void GetOwnerPollIDs(Guid applicationId, ref List<Guid>ret, Guid isCopyOfPollId, Guid ownerId) {
-        string spName = GetFullyQualifiedName("GetOwnerPollIDs");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, isCopyOfPollId, ownerId);
-            ProviderUtil.parse_guids(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public UUID getPollInstance(UUID applicationId, UUID pollId, UUID copyFromPollId, UUID ownerId, UUID currentUserId) {
+        return rvConnection.getUUID(getQualifiedName("GetPollInstance"),
+                applicationId, pollId, copyFromPollId, ownerId, currentUserId, publicMethods.now());
     }
 
-    public static bool RenamePoll(Guid applicationId, Guid pollId, string name, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("RenamePoll");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, name, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public List<UUID> getOwnerPollIDs(UUID applicationId, UUID isCopyOfPollId, UUID ownerId) {
+        return rvConnection.getUUIDList(getQualifiedName("GetOwnerPollIDs"), applicationId, isCopyOfPollId, ownerId);
     }
 
-    public static bool SetPollDescription(Guid applicationId, Guid pollId, string description, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetPollDescription");
-
-        try {
-            if (string.IsNullOrEmpty(description)) description = null;
-
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, description, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean renamePoll(UUID applicationId, UUID pollId, String name, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("RenamePoll"),
+                applicationId, pollId, name, currentUserId, publicMethods.now());
     }
 
-    public static bool SetPollBeginDate(Guid applicationId, Guid pollId, DateTime?beginDate, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetPollBeginDate");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, beginDate, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setPollDescription(UUID applicationId, UUID pollId, String description, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetPollDescription"),
+                applicationId, pollId, description, currentUserId, publicMethods.now());
     }
 
-    public static bool SetPollFinishDate(Guid applicationId, Guid pollId, DateTime?finishDate, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetPollFinishDate");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, finishDate, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setPollBeginDate(UUID applicationId, UUID pollId, DateTime beginDate, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetPollBeginDate"),
+                applicationId, pollId, beginDate, currentUserId, publicMethods.now());
     }
 
-    public static bool SetPollShowSummary(Guid applicationId, Guid pollId, bool showSummary, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetPollShowSummary");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, showSummary, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setPollFinishDate(UUID applicationId, UUID pollId, DateTime finishDate, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetPollFinishDate"),
+                applicationId, pollId, finishDate, currentUserId, publicMethods.now());
     }
 
-    public static bool SetPollHideContributors(Guid applicationId, Guid pollId, bool hideContributors, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("SetPollHideContributors");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, hideContributors, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setPollShowSummary(UUID applicationId, UUID pollId, boolean showSummary, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetPollShowSummary"),
+                applicationId, pollId, showSummary, currentUserId, publicMethods.now());
     }
 
-    public static bool RemovePoll(Guid applicationId, Guid pollId, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("RemovePoll");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean setPollHideContributors(UUID applicationId, UUID pollId, boolean hideContributors, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("SetPollHideContributors"),
+                applicationId, pollId, hideContributors, currentUserId, publicMethods.now());
     }
 
-    public static bool RecyclePoll(Guid applicationId, Guid pollId, Guid currentUserId) {
-        string spName = GetFullyQualifiedName("RecyclePoll");
-
-        try {
-            return ProviderUtil.succeed(ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, currentUserId, DateTime.Now));
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return false;
-        }
+    public boolean removePoll(UUID applicationId, UUID pollId, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("RemovePoll"), applicationId, pollId, currentUserId, publicMethods.now());
     }
 
-    public static void GetPollStatus(Guid applicationId, Guid?pollId, Guid?isCopyOfPollId,
-                                     Guid currentUserId, ref string description, ref DateTime?beginDate, ref DateTime?finishDate,
-                                     ref Guid?instanceId, ref int?elementsCount, ref int?filledElementsCount, ref int?allFilledFormsCount) {
-        string spName = GetFullyQualifiedName("GetPollStatus");
-
-        try {
-            if (pollId == Guid.Empty) pollId = null;
-            if (isCopyOfPollId == Guid.Empty) isCopyOfPollId = null;
-
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, pollId, isCopyOfPollId, currentUserId);
-            _parse_poll_status(ref reader, ref description, ref beginDate, ref finishDate, ref instanceId,
-                    ref elementsCount, ref filledElementsCount, ref allFilledFormsCount);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public boolean recyclePoll(UUID applicationId, UUID pollId, UUID currentUserId) {
+        return rvConnection.succeed(getQualifiedName("RecyclePoll"), applicationId, pollId, currentUserId, publicMethods.now());
     }
 
-    public static Dictionary<Guid, int> GetPollElementsInstanceCount(Guid applicationId, Guid pollId) {
-        string spName = GetFullyQualifiedName("GetPollElementsInstanceCount");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, pollId);
-            return ProviderUtil.parse_items_count(ref reader);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return new Dictionary<Guid, int>();
-        }
+    public void getPollStatus(UUID applicationId, UUID pollId, UUID isCopyOfPollId, UUID currentUserId,
+                              StringBuilder description, MutableDateTime beginDate, MutableDateTime finishDate,
+                              MutableUUID instanceId, MutableInt elementsCount, MutableInt filledElementsCount,
+                              MutableInt allFilledFormsCount) {
+        parser.pollStatus(rvConnection.read(getQualifiedName("GetPollStatus"),
+                applicationId, pollId, isCopyOfPollId, currentUserId), description, beginDate, finishDate,
+                instanceId, elementsCount, filledElementsCount, allFilledFormsCount);
     }
 
-    public static void GetPollAbstractText(Guid applicationId, ref List<PollAbstract>ret,
-                                           Guid pollId, List<Guid> elementIds, int?count, int?lowerBoundary) {
-        string spName = GetFullyQualifiedName("GetPollAbstractText");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, pollId,
-                    string.Join(",", elementIds), ',', count, lowerBoundary);
-            _parse_poll_abstract(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public Map<UUID, Integer> getPollElementsInstanceCount(UUID applicationId, UUID pollId) {
+        return rvConnection.getItemsCount(getQualifiedName("GetPollElementsInstanceCount"), applicationId, pollId);
     }
 
-    public static void GetPollAbstractGuid(Guid applicationId, ref List<PollAbstract>ret,
-                                           Guid pollId, List<Guid> elementIds, int?count, int?lowerBoundary) {
-        string spName = GetFullyQualifiedName("GetPollAbstractGuid");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, pollId,
-                    string.Join(",", elementIds), ',', count, lowerBoundary);
-            _parse_poll_abstract(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<PollAbstract> getPollAbstractText(UUID applicationId, UUID pollId,
+                                                  List<UUID> elementIds, Integer count, Integer lowerBoundary) {
+        return parser.pollAbstract(rvConnection.read(getQualifiedName("GetPollAbstractText"), applicationId,
+                pollId, elementIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ',',
+                count, lowerBoundary));
     }
 
-    public static void GetPollAbstractBool(Guid applicationId, ref List<PollAbstract>ret,
-                                           Guid pollId, List<Guid> elementIds) {
-        string spName = GetFullyQualifiedName("GetPollAbstractBool");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, pollId,
-                    string.Join(",", elementIds), ',');
-            _parse_poll_abstract(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<PollAbstract> getPollAbstractGuid(UUID applicationId, UUID pollId,
+                                                  List<UUID> elementIds, Integer count, Integer lowerBoundary) {
+        return parser.pollAbstract(rvConnection.read(getQualifiedName("GetPollAbstractGuid"), applicationId,
+                pollId, elementIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ',',
+                count, lowerBoundary));
     }
 
-    public static void GetPollAbstractNumber(Guid applicationId, ref List<PollAbstract>ret,
-                                             Guid pollId, List<Guid> elementIds, int?count, int?lowerBoundary) {
-        string spName = GetFullyQualifiedName("GetPollAbstractNumber");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId, pollId,
-                    string.Join(",", elementIds), ',', count, lowerBoundary);
-            _parse_poll_abstract(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<PollAbstract> getPollAbstractBool(UUID applicationId, UUID pollId, List<UUID> elementIds) {
+        return parser.pollAbstract(rvConnection.read(getQualifiedName("GetPollAbstractBool"), applicationId,
+                pollId, elementIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ','));
     }
 
-    public static void GetPollElementInstances(Guid applicationId, ref List<FormElement>ret,
-                                               Guid pollId, Guid elementId, int?count, int?lowerBoundary) {
-        string spName = GetFullyQualifiedName("GetPollElementInstances");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId,
-                    pollId, elementId, count, lowerBoundary);
-            _parse_poll_element_instances(ref reader, ref ret);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<PollAbstract> getPollAbstractNumber(UUID applicationId, UUID pollId,
+                                                    List<UUID> elementIds, Integer count, Integer lowerBoundary) {
+        return parser.pollAbstract(rvConnection.read(getQualifiedName("GetPollAbstractNumber"), applicationId,
+                pollId, elementIds.stream().map(UUID::toString).collect(Collectors.joining(",")), ',',
+                count, lowerBoundary));
     }
 
-    public static void GetCurrentPollsCount(Guid applicationId,
-                                            Guid?currentUserId, ref int count, ref int doneCount) {
-        string spName = GetFullyQualifiedName("GetCurrentPollsCount");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId,
-                    currentUserId, DateTime.Now, RaaiVanSettings.DefaultPrivacy(applicationId));
-            _parse_current_polls_count(ref reader, ref count, ref doneCount);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-        }
+    public List<FormElement> getPollElementInstances(UUID applicationId, UUID pollId,
+                                                     UUID elementId, Integer count, Integer lowerBoundary) {
+        return parser.pollElementInstances(rvConnection.read(getQualifiedName("GetPollElementInstances"),
+                applicationId, pollId, elementId, count, lowerBoundary));
     }
 
-    public static Dictionary<Guid, bool> GetCurrentPolls(Guid applicationId,
-                                                         Guid?currentUserId, int?count, int?lowerBoundary) {
-        string spName = GetFullyQualifiedName("GetCurrentPolls");
-
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId,
-                    currentUserId, DateTime.Now, RaaiVanSettings.DefaultPrivacy(applicationId), count, lowerBoundary);
-            return ProviderUtil.parse_items_status_bool(ref reader);
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return new Dictionary<Guid, bool>();
-        }
+    public void getCurrentPollsCount(UUID applicationId, UUID currentUserId, MutableInt count, MutableInt doneCount) {
+        parser.currentPollsCount(rvConnection.read(getQualifiedName("GetCurrentPollsCount"),
+                applicationId, currentUserId, publicMethods.now(), raaivanSettings.DefaultPrivacy(applicationId)),
+                count, doneCount);
     }
 
-    public static List<Guid> IsPoll(Guid applicationId, List<Guid> ids) {
-        string spName = GetFullyQualifiedName("IsPoll");
+    public Map<UUID, Boolean> getCurrentPolls(UUID applicationId, UUID currentUserId, MutableInt count, MutableInt lowerBoundary) {
+        return rvConnection.getItemsStatusBool(getQualifiedName("GetCurrentPolls"), applicationId, currentUserId,
+                publicMethods.now(), raaivanSettings.DefaultPrivacy(applicationId), count, lowerBoundary);
+    }
 
-        try {
-            IDataReader reader = ProviderUtil.execute_reader(spName, applicationId,
-                    ProviderUtil.list_to_string < Guid > (ids), ',');
-            List<Guid> ret = new List<Guid>();
-            ProviderUtil.parse_guids(ref reader, ref ret);
-            return ret;
-        } catch (Exception ex) {
-            LogController.save_error_log(applicationId, null, spName, ex, ModuleIdentifier.FG);
-            return new List<Guid>();
-        }
+    public List<UUID> isPoll(UUID applicationId, List<UUID> ids) {
+        return rvConnection.getUUIDList(getQualifiedName("IsPoll"), applicationId,
+                ids.stream().map(UUID::toString).collect(Collectors.joining(",")), ',');
+    }
+
+    public boolean isPoll(UUID applicationId, UUID id) {
+        List<UUID> ids = new ArrayList<UUID>() {{
+            add(id);
+        }};
+
+        return isPoll(applicationId, ids).size() > 0;
     }
 
     //end of Polls

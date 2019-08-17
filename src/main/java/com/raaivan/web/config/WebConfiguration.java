@@ -5,6 +5,9 @@ import com.raaivan.modules.corenetwork.CNParsers;
 import com.raaivan.modules.corenetwork.util.CNUtilities;
 import com.raaivan.modules.dataexchange.DEDAO;
 import com.raaivan.modules.dataexchange.DEParsers;
+import com.raaivan.modules.forms.FGDAO;
+import com.raaivan.modules.forms.FGParsers;
+import com.raaivan.modules.forms.util.FGUtilities;
 import com.raaivan.util.dbutil.RVConnection;
 import com.raaivan.modules.documents.DCTDAO;
 import com.raaivan.modules.documents.DCTParsers;
@@ -233,4 +236,16 @@ public class WebConfiguration extends WebMvcConfigurationSupport {
     @Bean
     @Scope(scopeName = BeanDefinition.SCOPE_PROTOTYPE)
     public User user(){ return new User(); }
+
+    @Bean
+    @ApplicationScope
+    public FGUtilities fgUtilities() { return new FGUtilities(); }
+
+    @Bean
+    @ApplicationScope
+    public FGParsers fgParsers(){ return new FGParsers(); }
+
+    @Bean
+    @ApplicationScope
+    public FGDAO fgDAO(){ return new FGDAO(); }
 }

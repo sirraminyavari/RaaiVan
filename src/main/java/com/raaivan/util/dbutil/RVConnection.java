@@ -500,4 +500,23 @@ public class RVConnection {
 
         return retDic;
     }
+
+    public Map<UUID, Boolean> getItemsStatusBool(String procedureName, Object... params)
+    {
+        RVResultSet result = read(procedureName, params);
+
+        Map<UUID, Boolean> retDic = new HashMap<>();
+
+        for (int i = 0, lnt = result.getRowsCount(); i < lnt; ++i) {
+            try {
+                UUID id = publicMethods.parseUUID((String) result.getValue(i, "ID"));
+                Boolean val = (Boolean) result.getValue(i, "Value");
+
+                if(id != null && val != null) retDic.put(id, val);
+            } catch (Exception e) {
+            }
+        }
+
+        return retDic;
+    }
 }
