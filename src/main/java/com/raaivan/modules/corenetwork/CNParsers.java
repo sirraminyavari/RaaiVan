@@ -29,13 +29,13 @@ import java.util.stream.Collectors;
 @ApplicationScope
 public class CNParsers {
     private PublicMethods publicMethods;
-    private RaaiVanSettings raaivaSettings;
+    private RaaiVanSettings raaiVanSettings;
     private RVConnection rvConnection;
 
     @Autowired
     public void _setDependencies(PublicMethods publicMethods, RaaiVanSettings raaivanSettings, RVConnection rvConnection) {
         if (this.publicMethods == null) this.publicMethods = publicMethods;
-        if (this.raaivaSettings == null) this.raaivaSettings = raaivanSettings;
+        if (this.raaiVanSettings == null) this.raaiVanSettings = raaivanSettings;
         if (this.rvConnection == null) this.rvConnection = rvConnection;
     }
 
@@ -55,7 +55,7 @@ public class CNParsers {
                 e.setAdditionalIDPattern((String) resultSet.getValue(i, "AdditionalIDPattern"));
 
                 if (StringUtils.isBlank(e.getAdditionalIDPattern())) {
-                    e.setAdditionalIDPattern(raaivaSettings.getCoreNetwork().DefaultAdditionalIDPattern(applicationId));
+                    e.setAdditionalIDPattern(raaiVanSettings.getCoreNetwork().DefaultAdditionalIDPattern(applicationId));
                     e.setHasDefaultPattern(true);
                 } else e.setHasDefaultPattern(false);
 

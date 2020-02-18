@@ -77,10 +77,6 @@ public class WebConfiguration extends WebMvcConfigurationSupport {
 
     @Bean
     @ApplicationScope
-    public CNParsers cnParsers(){ return new CNParsers(); }
-
-    @Bean
-    @ApplicationScope
     public CNDAO cnDAO(){ return new CNDAO(); }
 
     @Bean

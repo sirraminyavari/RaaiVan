@@ -1,7 +1,6 @@
 package com.raaivan.util;
 
 import com.sun.org.apache.xerces.internal.impl.xpath.regex.RegularExpression;
-import org.springframework.scheduling.support.SimpleTriggerContext;
 
 public class Base64 {
     public static boolean is_base64(String input){
@@ -11,7 +10,7 @@ public class Base64 {
 
     public static byte[] encode(byte[] input){
         try {
-            if (input == null || input.equals("")) return input;
+            if (input == null || input.length == 0) return input;
             return org.apache.tomcat.util.codec.binary.Base64.encodeBase64(input);
         }
         catch (Exception ex){
