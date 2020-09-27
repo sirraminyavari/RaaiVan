@@ -1,7 +1,6 @@
 package com.raaivan.web;
 
 import com.raaivan.util.PublicConsts;
-import com.raaivan.util.PublicMethods;
 import com.raaivan.util.RVBeanFactory;
 import com.raaivan.util.rvsettings.RaaiVanSettings;
 import org.springframework.boot.SpringApplication;

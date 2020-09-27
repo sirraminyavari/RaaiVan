@@ -9,10 +9,15 @@ spring:
     show-sql: true
     hibernate:
       ddl-auto: none
+  #resources:
+  #  static-locations: classpath:/static/
 server:
   port: 8082
   compression:
     enabled: true
+  #error:
+  #  whitelabel:
+  #    enabled: false
 ---
 spring:
   profiles: test

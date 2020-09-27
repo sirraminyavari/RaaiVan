@@ -47,8 +47,6 @@ public class API {
     }
 
     public RVJSON handle(String handlerName, String command){
-        RVJSON retJson = _handle(handlerName, command);
-
-        return retJson;
+        return _handle(handlerName, command);
     }
 }
