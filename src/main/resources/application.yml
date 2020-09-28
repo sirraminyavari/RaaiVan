@@ -1,5 +1,6 @@
 spring:
-  profiles: dev
+  profiles:
+    include: default
   datasource:
     url: jdbc:sqlserver://localhost:53368;databaseName=EKM_App
     username: sa
@@ -9,8 +10,8 @@ spring:
     show-sql: true
     hibernate:
       ddl-auto: none
-  #resources:
-  #  static-locations: classpath:/static/
+  thymeleaf:
+    prefix: classpath:/static/
 server:
   port: 8082
   compression:
